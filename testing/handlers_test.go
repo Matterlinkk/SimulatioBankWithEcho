@@ -97,6 +97,7 @@ func TestPositiveProcessTransactionHandler(t *testing.T) {
 	c.SetPath("/client/:id/process/transaction")
 	c.SetParamNames("id")
 	c.SetParamValues("1")
+	close(client1.TransChan)
 
 	if assert.NoError(t, handlers.ProcessTransactionHandler(c, fakeDataBase)) {
 		assert.Equal(t, http.StatusOK, rec.Code)
@@ -311,7 +312,7 @@ func TestNegative4SendFundsHandler(t *testing.T) {
 	}
 }
 
-func TestPositiveCreateTransactionHandlerWithProcessTransaction(t *testing.T) {
+func TestPositive1CreateTransactionHandlerWithProcessTransaction(t *testing.T) {
 	e := echo.New()
 
 	bankAccountC1 := &structs.BankAccount{Balance: 10000}
@@ -346,6 +347,44 @@ func TestPositiveCreateTransactionHandlerWithProcessTransaction(t *testing.T) {
 		assert.Equal(t, http.StatusOK, recCreate.Code)
 
 		assert.Equal(t, 9900, client1.Account.Balance)
+	}
+}
+
+func TestPositive2CreateTransactionHandlerWithProcessTransaction(t *testing.T) {
+	e := echo.New()
+
+	bankAccountC1 := &structs.BankAccount{Balance: 10000}
+	client1 := &structs.Client{ID: 1, Account: bankAccountC1, TransChan: make(chan structs.Transaction, 1)}
+	client1.TransBool = true
+
+	fakeDataBase := []structs.Client{*client1}
+
+	reqProcess := httptest.NewRequest(http.MethodPost, "/client/:id/process/transaction", nil)
+	recProcess := httptest.NewRecorder()
+	cProcess := e.NewContext(reqProcess, recProcess)
+	cProcess.SetParamNames("id")
+	cProcess.SetParamValues("1")
+
+	go func() {
+		err := handlers.ProcessTransactionHandler(cProcess, fakeDataBase)
+		if err != nil {
+			log.Errorf("Error: %s", err)
+			return
+		}
+
+		assert.Equal(t, http.StatusOK, recProcess.Code)
+	}()
+
+	reqCreate := httptest.NewRequest(http.MethodPost, "/client/:id/transaction?amount=100&isDebit=false", nil)
+	recCreate := httptest.NewRecorder()
+	cCreate := e.NewContext(reqCreate, recCreate)
+	cCreate.SetParamNames("id")
+	cCreate.SetParamValues("1")
+
+	if assert.NoError(t, handlers.CreateTransactionHandler(cCreate, fakeDataBase)) {
+		assert.Equal(t, http.StatusOK, recCreate.Code)
+
+		assert.Equal(t, 10100, client1.Account.Balance)
 	}
 }
 

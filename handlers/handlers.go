@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"sync"
 )
 
 // ProcessTransactionHandler @Summary Processing a customer transaction
@@ -27,6 +28,8 @@ func ProcessTransactionHandler(c echo.Context, fakeDataBase []structs.Client) er
 	}
 
 	var client *structs.Client
+	var wg sync.WaitGroup
+	wg.Add(1)
 
 	for i := range fakeDataBase {
 		if fakeDataBase[i].ID == clientID {
@@ -39,9 +42,9 @@ func ProcessTransactionHandler(c echo.Context, fakeDataBase []structs.Client) er
 	}
 
 	client.TransBool = true
+	go operations.ProcessTransactions(*client)
 
-	operations.ProcessTransactions(*client)
-
+	wg.Wait()
 	return c.NoContent(http.StatusOK)
 }
 
